@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "shopping_agent": "./src/shopping_agent/agent.py:graph"
+  },
+  "env": ".env"
+}
