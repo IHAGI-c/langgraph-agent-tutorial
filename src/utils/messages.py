@@ -365,42 +365,30 @@ def stream_graph(
     """
     prev_node = ""
 
-    # LangGraph v1.0에서 stream_mode="messages"는 2-튜플 (message, metadata)를 반환
     for chunk_msg, metadata in graph.stream(
         inputs, config, context=context, stream_mode="messages"
     ):
-        # metadata에서 노드 정보 추출
-        # v1.0에서는 'langgraph_node' 키를 통해 노드 이름에 접근
         curr_node = metadata.get("langgraph_node", "")
 
-        # node_names가 비어있거나 현재 노드가 node_names에 있는 경우에만 처리
         if not node_names or curr_node in node_names:
-            # 콜백 함수가 있는 경우 실행
             if callback:
-                # chunk_msg의 content 속성이 있는지 확인
                 content = getattr(chunk_msg, "content", chunk_msg)
                 callback({"node": curr_node, "content": content})
-            # 콜백이 없는 경우 기본 출력
             else:
-                # 노드가 변경된 경우에만 구분선 출력
                 if curr_node != prev_node:
                     print("\n" + "=" * 50)
-                    print(f"🔄 Node: \033[1;36m{curr_node}\033[0m 🔄")
+                    print(f"Node: \033[1;36m{curr_node}\033[0m")
                     print("- " * 25)
 
-                # chunk_msg의 content 추출 및 출력
                 if hasattr(chunk_msg, "content"):
                     content = chunk_msg.content
-                    # content가 문자열인 경우 직접 출력
                     if isinstance(content, str):
                         print(content, end="", flush=True)
-                    # content가 리스트인 경우 (Anthropic/Claude 스타일)
                     elif isinstance(content, list):
                         for item in content:
                             if isinstance(item, dict) and "text" in item:
                                 print(item["text"], end="", flush=True)
                 else:
-                    # content 속성이 없는 경우 chunk_msg 자체를 출력
                     print(chunk_msg, end="", flush=True)
 
             prev_node = curr_node
@@ -454,10 +442,10 @@ def invoke_graph(
                 print("\n" + "=" * 50)
                 formatted_namespace = format_namespace(namespace)
                 if formatted_namespace == "root graph":
-                    print(f"🔄 Node: \033[1;36m{node_name}\033[0m 🔄")
+                    print(f"Node: \033[1;36m{node_name}\033[0m")
                 else:
                     print(
-                        f"🔄 Node: \033[1;36m{node_name}\033[0m in [\033[1;33m{formatted_namespace}\033[0m] 🔄"
+                        f"Node: \033[1;36m{node_name}\033[0m in [\033[1;33m{formatted_namespace}\033[0m]"
                     )
                 print("- " * 25)
 
@@ -539,67 +527,51 @@ async def astream_graph(
                     # 노드가 변경된 경우에만 구분선 출력
                     if curr_node != prev_node:
                         print("\n" + "=" * 50)
-                        print(f"🔄 Node: \033[1;36m{curr_node}\033[0m 🔄")
+                        print(f"Node: \033[1;36m{curr_node}\033[0m")
                         print("- " * 25)
 
-                    # Claude/Anthropic 모델의 토큰 청크 처리 - 항상 텍스트만 추출
                     if hasattr(chunk_msg, 'content'):
-                        # 리스트 형태의 content (Anthropic/Claude 스타일)
                         if isinstance(chunk_msg.content, list):
                             for item in chunk_msg.content:
                                 if isinstance(item, dict) and 'text' in item:
                                     print(item['text'], end="", flush=True)
-                        # 문자열 형태의 content
                         elif isinstance(chunk_msg.content, str):
                             print(chunk_msg.content, end="", flush=True)
-                    # 그 외 형태의 chunk_msg 처리
                     else:
                         print(chunk_msg, end="", flush=True)
 
                 prev_node = curr_node
 
     elif stream_mode == "updates":
-        # 에러 수정: 언패킹 방식 변경
-        # REACT 에이전트 등 일부 그래프에서는 단일 딕셔너리만 반환함
         async for chunk in graph.astream(
             inputs, config, context=context, stream_mode=stream_mode, subgraphs=subgraphs
         ):
-            # 반환 형식에 따라 처리 방법 분기
             if isinstance(chunk, tuple) and len(chunk) == 2:
-                # 기존 예상 형식: (namespace, chunk_dict)
                 namespace, node_chunks = chunk
             else:
-                # 단일 딕셔너리만 반환하는 경우 (REACT 에이전트 등)
-                namespace = []  # 빈 네임스페이스 (루트 그래프)
-                node_chunks = chunk  # chunk 자체가 노드 청크 딕셔너리
+                namespace = []
+                node_chunks = chunk
 
-            # 딕셔너리인지 확인하고 항목 처리
             if isinstance(node_chunks, dict):
                 for node_name, node_chunk in node_chunks.items():
                     final_result = {"node": node_name, "content": node_chunk, "namespace": namespace}
 
-                    # node_names가 비어있지 않은 경우에만 필터링
                     if len(node_names) > 0 and node_name not in node_names:
                         continue
 
-                    # 콜백 함수가 있는 경우 실행
                     if callback is not None:
                         result = callback({"node": node_name, "content": node_chunk})
                         if hasattr(result, "__await__"):
                             await result
-                    # 콜백이 없는 경우 기본 출력
                     else:
-                        # 노드가 변경된 경우에만 구분선 출력 (messages 모드와 동일하게)
                         if node_name != prev_node:
                             print("\n" + "=" * 50)
-                            print(f"🔄 Node: \033[1;36m{node_name}\033[0m 🔄")
+                            print(f" Node: \033[1;36m{node_name}\033[0m ")
                             print("- " * 25)
 
-                        # 노드의 청크 데이터 출력 - 텍스트 중심으로 처리
                         if isinstance(node_chunk, dict):
                             for k, v in node_chunk.items():
                                 if isinstance(v, BaseMessage):
-                                    # BaseMessage의 content 속성이 텍스트나 리스트인 경우를 처리
                                     if hasattr(v, 'content'):
                                         if isinstance(v.content, list):
                                             for item in v.content:
@@ -645,10 +617,9 @@ async def astream_graph(
             else:
                 # 딕셔너리가 아닌 경우 전체 청크 출력
                 print("\n" + "=" * 50)
-                print(f"🔄 Raw output 🔄")
+                print(f"Raw output")
                 print("- " * 25)
                 print(node_chunks, end="", flush=True)
-                # 구분선을 여기서 출력하지 않음
                 final_result = {"content": node_chunks}
 
     else:
@@ -725,10 +696,10 @@ async def ainvoke_graph(
                     print("\n" + "=" * 50)
                     formatted_namespace = format_namespace(namespace)
                     if formatted_namespace == "root graph":
-                        print(f"🔄 Node: \033[1;36m{node_name}\033[0m 🔄")
+                        print(f"Node: \033[1;36m{node_name}\033[0m")
                     else:
                         print(
-                            f"🔄 Node: \033[1;36m{node_name}\033[0m in [\033[1;33m{formatted_namespace}\033[0m] 🔄"
+                            f"Node: \033[1;36m{node_name}\033[0m in [\033[1;33m{formatted_namespace}\033[0m]"
                         )
                     print("- " * 25)
 
@@ -758,7 +729,7 @@ async def ainvoke_graph(
         else:
             # 딕셔너리가 아닌 경우 전체 청크 출력
             print("\n" + "=" * 50)
-            print(f"🔄 Raw output 🔄")
+            print(f" Raw output ")
             print("- " * 25)
             print(node_chunks)
             print("=" * 50)
